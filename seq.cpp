@@ -79,7 +79,7 @@ void print(vector<double*> matrix, int m, int n){
 		}
 		cout << endl;
 	}
-	cout << "**************       THE END          ****************" << endl;
+	cout << "****************       THE END       ****************" << endl;
 }
 
 void write_data(vector<double*> matrix,string name){
@@ -101,6 +101,7 @@ void write_data(vector<double*> matrix,string name){
 }
 
 void matrix_copy(vector<double*> mat1, vector<double*> mat2){
+	// only for copying column matrix
 	int n = mat1.size();
 	for(int i = 0;i<n;i++){
 		*(mat2[i]) = *(mat1[i]);
@@ -118,7 +119,7 @@ double calcDiff(vector<double*> m1,vector<double*> m2){
 	return ans;
 }
 
-void update(vector<double*> mat){
+void normalize(vector<double*> mat){
 	double sum = 0;
 	for(int i = 0;i<mat.size();i++){
 		sum+=(*(mat[i]));
@@ -156,7 +157,7 @@ void pagerank(vector<double*> googleM, vector<double*> initM, double limit,strin
 		matrixMult(googleM,initM,res);
 		diff = calcDiff(initM,res);
 		matrix_copy(res,initM);
-		update(initM);
+		normalize(initM);
 		iteration_count++;
 	}
 
@@ -172,6 +173,5 @@ int main(int argc, char const *argv[]){
 	vector<double*> googleM = read_data(input_file_path, dampening_fac);
 	vector<double*> initM = initialize(googleM.size());
 	pagerank(googleM,initM,limit,output_file_path);
-	print(initM,googleM.size(),1);
 	return 0;
 }
