@@ -24,3 +24,10 @@ Plot graphs with x-axis as benchmark ID, and y-axis as pagerank runtime, three g
 
 ## To submit
 Submit a zip file containing the three cpp files, a Makefile that compiles the executables and the PDF.
+
+## Helper (only for MacOS)
+1. Install boost library using `brew install boost`
+2. Make sure to keep the cpp file in the include directory. Add `#include <ios>` in mapreduce.hpp
+3. Command to compile `clang++ -std=c++11 prime.cpp /usr/local/opt/boost/lib/libboost_system.a /usr/local/opt/boost/lib/libboost_iostreams.a /usr/local/opt/boost/lib/libboost_filesystem.a -pthread -o prime_out.o`
+4. Links
+	* [MapReduce Library](https://github.com/jainvasu631/mapreduce)
