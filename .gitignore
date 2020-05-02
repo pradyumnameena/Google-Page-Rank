@@ -41,3 +41,15 @@ mapreduce-develop/mapreduce.vs2013.vcxproj
 mapreduce-develop/mapreduce.vs2015.sln
 mapreduce-develop/mapreduce.vs2015.vcxproj
 mapreduce-develop/README.md
+test/detail/schedule_policy/sequential.hpp
+test/detail/schedule_policy/cpu_parallel.hpp
+test/detail/schedule_policy.hpp
+test/detail/platform.hpp
+test/detail/null_combiner.hpp
+test/detail/mergesort.hpp
+test/detail/job.hpp
+test/detail/intermediates/local_disk.hpp
+test/detail/intermediates/in_memory.hpp
+test/detail/intermediates.hpp
+test/detail/hash_partitioner.hpp
+test/detail/datasource.hpp
