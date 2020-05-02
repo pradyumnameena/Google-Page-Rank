@@ -31,3 +31,4 @@ Submit a zip file containing the three cpp files, a Makefile that compiles the e
 3. Command to compile `clang++ -std=c++11 prime.cpp /usr/local/opt/boost/lib/libboost_system.a /usr/local/opt/boost/lib/libboost_iostreams.a /usr/local/opt/boost/lib/libboost_filesystem.a -pthread -o prime_out.o`
 4. Links
 	* [MapReduce Library](https://github.com/jainvasu631/mapreduce)
+	* [Mapreduce-MPI Library](https://mapreduce.sandia.gov/doc/Manual.pdf)
