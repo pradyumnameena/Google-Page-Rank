@@ -12,14 +12,16 @@ using namespace std;
 
 // global variables
 int num_procs = 2;
+int num_nodes = 0;
+double limit = 0.00001;
+int max_iterations = 1000;
 double damping_factor = 0.85;
 
-// Declaraation of derived datatypes
 MPI_Datatype hybrid_data_type;
 
 struct ultron{
 	double* p_ranks;
-	int n_links,n_pages;
+	int n_msgs,n_pages;
 	vector<int> noEntryNodes;
 	vector<int> procs_msg_count;
 	map<int, vector<int> > map;
@@ -29,6 +31,23 @@ struct hybrid_data{
 	double value;
 	int id;
 };
+
+void write_data(double* matrix, int n, string name){
+	double sum = 0.0;
+	ofstream file;
+	file.precision(16);
+	file.open("./" + name);
+	
+	if(file.is_open()){
+		for(int i = 0;i<n;i++){
+			file << i << " = " << *(matrix + i) << " \n";
+			sum+=(*(matrix + i));
+		}
+		file << "sum " << sum;
+	}
+
+	file.close();
+}
 
 void initialize(ultron &ds, string file_path){
 	int n = -1;
@@ -63,7 +82,7 @@ void initialize(ultron &ds, string file_path){
 	}
 
 	ds.n_pages = n;
-	ds.n_links = count;
+	ds.n_msgs = count;
 	data_file.close();
 }
 
@@ -72,7 +91,6 @@ void mapper(ultron ds, MPI_Request reqArray[]){
 	int count = 0;
 
 	for(int i = 1;i<=num_procs;i++){
-		MPI_Send(&ds.n_pages,1,MPI_INT,i,0,MPI_COMM_WORLD);
 		MPI_Send(&ds.procs_msg_count[i],1,MPI_INT,i,0,MPI_COMM_WORLD);
 	}
 	
@@ -100,17 +118,14 @@ void mapper(ultron ds, MPI_Request reqArray[]){
 }
 
 void reduce(){
-	double sum = 0.0;
 	int num_messages,num_nodes,idx,rank;
 	MPI_Comm_rank(MPI_COMM_WORLD,&rank);
 
-	MPI_Recv(&num_nodes,1,MPI_INT,0,0,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
 	MPI_Recv(&num_messages,1,MPI_INT,0,0,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
 	
 	MPI_Request recvArray[num_messages];
 	MPI_Status statusArray[num_messages];
 	struct hybrid_data datArray[num_messages];
-	double* rank_array = (double*)malloc(num_nodes*sizeof(double));
 
 	while(idx<num_messages){
 		MPI_Irecv(&datArray[idx],1,hybrid_data_type,0,0,MPI_COMM_WORLD,&recvArray[idx]);
@@ -125,20 +140,20 @@ void reduce(){
 
 	for(int i = 0;i<num_messages;i++){
 		idx = datArray[i].id - rank*num_nodes;
-		*(rank_array + i)+=datArray[i].value;
-		sum+=datArray[i].value;
+		*(rank_array + idx)+=datArray[i].value;
 	}
 
 	MPI_Send(rank_array,num_nodes,MPI_DOUBLE,0,0,MPI_COMM_WORLD);
-	MPI_Send(&sum,1,MPI_DOUBLE,0,0,MPI_COMM_WORLD);
 }
 
 int main(int argc, char *argv[]){
 	string input_file_path = argv[1];
-	num_procs = atoi(argv[3]) - 1;
+	string output_file_path = argv[2];
+	num_procs = atoi(argv[4]) - 1;
 	
 	ultron ds;
 	initialize(ds,input_file_path);
+	num_nodes = ds.n_pages/num_procs;
 	
 	MPI_Init(&argc,&argv);
 
@@ -149,9 +164,42 @@ int main(int argc, char *argv[]){
    	MPI_Type_commit(&hybrid_data_type);
 
    	// ALGORITHM
-   	int rank;
+   	int rank,i;
+   	double curr_diff = 1.0;
    	MPI_Comm_rank(MPI_COMM_WORLD,&rank);
+   	double* rank_array = (double*)malloc(ds.n_pages*sizeof(double));
 
+   	while(i<max_iterations && curr_diff>limit){
+   		if(rank==0){
+   			MPI_Request reqArray[ds.n_msgs];
+   			MPI_Status statusArray[ds.n_msgs];
+   			mapper(ds, reqArray);
+   			MPI_Waitall(ds.n_msgs,reqArray,statusArray);
+
+   			for(int proc_id = 1;proc_id<=num_procs;proc_id++){
+   				MPI_Recv(rank_array + (proc_id-1)*num_nodes,num_nodes,MPI_DOUBLE,proc_id,0,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+   			}
+
+   			curr_diff = 0.0;
+   			for(int index = 0;index<ds.n_pages;index++){
+   				curr_diff+=fabs(*(ds.p_ranks+index) - *(rank_array+index));
+   				*(ds.p_ranks + index) = *(rank_array + index);
+   			}
+   			
+   			for(int proc_id = 1;proc_id<=num_procs;proc_id++){
+   				MPI_Send(&curr_diff,1,MPI_DOUBLE,proc_id,0,MPI_COMM_WORLD);
+   			}
+   			
+   			if(curr_diff<limit || i==max_iterations-1){
+   				write_data(rank_array,ds.n_pages,output_file_path);
+   			}
+
+   		}else{
+   			reduce();
+   			MPI_Recv(&curr_diff,1,MPI_DOUBLE,0,0,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+   		}
+   		i++;
+   	}
 
 	MPI_Finalize();
 	return 0;
