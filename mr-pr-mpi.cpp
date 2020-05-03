@@ -15,7 +15,7 @@ double* rank_array;
 int num_procs = 2;
 int num_nodes = 0;
 double limit = 0.00001;
-int max_iterations = 10;
+int max_iterations = 1000;
 double damping_factor = 0.85;
 
 MPI_Datatype hybrid_data_type;
@@ -61,7 +61,6 @@ void write_data(double* matrix, int n, string name){
 	if(file.is_open()){
 		for(int i = 0;i<n;i++){
 			file << i << " = " << *(matrix + i) << " \n";
-			// file << *(matrix + i) << " \n";
 			sum+=(*(matrix + i));
 		}
 		file << "sum " << sum;
@@ -70,7 +69,7 @@ void write_data(double* matrix, int n, string name){
 	file.close();
 }
 
-void initialize2(ultron &ds, string file_path){
+void initialize(ultron &ds, string file_path){
 	int n = -1;
 	int count = 0;
 	int a,b,proc_id;
@@ -84,23 +83,23 @@ void initialize2(ultron &ds, string file_path){
 		ds.map[a].push_back(b);
 		n = max(n,max(a,b));
 		count+=1;
-
-		proc_id = (b%num_procs)+1;
-		ds.procs_msg_count[proc_id]++;
 	}
 	n+=1;
+	num_nodes = n/num_procs;
 
 	ds.p_ranks = (double*)malloc(n*sizeof(double));
 	for(int i = 0;i<n;i++){
 		*(ds.p_ranks + i) = 1.0/n;
 		if(ds.map.find(i)==ds.map.end()){
 			for(int j = 0;j<n;j++){
-				// if(j!=i){
-					ds.map[i].push_back(j);
-					proc_id = (j%num_procs)+1;
-					ds.procs_msg_count[proc_id]++;
-					count++;
-				// }
+				proc_id = (j/num_nodes)+1;
+				ds.procs_msg_count[proc_id]++;
+				count++;
+			}
+		}else{
+			for(int j = 0;j<ds.map[i].size();j++){
+				proc_id = (ds.map[i][j])/num_nodes + 1;
+				ds.procs_msg_count[proc_id]++;
 			}
 		}
 	}
@@ -121,23 +120,23 @@ void mapper(ultron ds, MPI_Request reqArray[], MPI_Status statusArray[]){
 	}
 	MPI_Waitall(num_procs,tempReqs,tempStats);
 	
-	// for(int i = 0;i<ds.noEntryNodes.size();i++){
-	// 	proc_id = ds.noEntryNodes[i]%num_procs + 1;
-	// 	struct hybrid_data send_packet;
-	// 	send_packet.id = ds.noEntryNodes[i];
-	// 	send_packet.value = 0.0;
-	// 	MPI_Isend(&send_packet,1,hybrid_data_type,proc_id,0,MPI_COMM_WORLD,&reqArray[count]);
-	// 	count++;
-	// }
-
 	for(int i = 0;i<ds.n_pages;i++){
 		if(ds.map.find(i)!=ds.map.end()){
 			for(int j = 0;j<ds.map[i].size();j++){
-				proc_id = (ds.map[i][j]%num_procs) + 1;
+				proc_id = (ds.map[i][j]/num_nodes) + 1;
 				struct hybrid_data send_packet;
 				send_packet.id = ds.map[i][j];
 				send_packet.value = (*(ds.p_ranks + i))/ds.map[i].size();
-				cout << i << "->" << ds.map[i][j] << "->" << send_packet.value << endl;
+				MPI_Isend(&send_packet,1,hybrid_data_type,proc_id,0,MPI_COMM_WORLD,&reqArray[count]);
+				count++;
+			}
+		}else{
+			for(int j = 0;j<ds.n_pages;j++){
+				proc_id = (j/num_nodes) + 1;
+				struct hybrid_data send_packet;
+				send_packet.id = j;
+				send_packet.value = (*(ds.p_ranks + i))/ds.n_pages;
+				cout << send_packet.value << endl;
 				MPI_Isend(&send_packet,1,hybrid_data_type,proc_id,0,MPI_COMM_WORLD,&reqArray[count]);
 				count++;
 			}
@@ -177,13 +176,6 @@ void reduce(){
 		*(rank_array + idx)+=(damping_factor * datArray[i].value);
 	}
 
-	cout.precision(16);
-	for(int k = 0;k<num_nodes;k++){
-		cout << *(rank_array + k) << ", ";
-	}
-	cout << endl;
-	cout << "reduce waala print done" << endl;
-
 	MPI_Isend(rank_array,num_nodes,MPI_DOUBLE,0,0,MPI_COMM_WORLD,&tempReq2);
 	MPI_Wait(&tempReq2,&tempStat2);
 }
@@ -194,8 +186,7 @@ int main(int argc, char *argv[]){
 	num_procs = atoi(argv[4]) - 1;
 	
 	ultron ds;
-	initialize2(ds,input_file_path);
-	num_nodes = ds.n_pages/num_procs;
+	initialize(ds,input_file_path);
 	
 	MPI_Init(&argc,&argv);
 
@@ -205,22 +196,17 @@ int main(int argc, char *argv[]){
    	MPI_Type_create_struct(2,lengths,displacement,types,&hybrid_data_type);
    	MPI_Type_commit(&hybrid_data_type);
 
-   	int rank,i;
+   	int rank,size,i;
    	double curr_diff = 1.0;
    	MPI_Comm_rank(MPI_COMM_WORLD,&rank);
+   	MPI_Comm_size(MPI_COMM_WORLD,&size);
    	rank_array = (double*)malloc(ds.n_pages*sizeof(double));
 
    	while(i<max_iterations && curr_diff>limit){
    		if(rank==0){
-   			// print_graph(ds);
    			MPI_Request reqArray[ds.n_msgs];
    			MPI_Status statusArray[ds.n_msgs];
 
-   			cout.precision(16);
-   			for(int k = 0;k<ds.n_pages;k++){
-   				cout << *(ds.p_ranks + k) << ", ";
-   			}
-   			cout << "main function waala print done" << endl;
    			mapper(ds, reqArray, statusArray);
 
    			MPI_Request reqArray2[num_procs];
