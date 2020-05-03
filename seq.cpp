@@ -14,10 +14,10 @@ vector<double*> initialize(int n){
 	for(int i = 0;i<n;i++){
 		double* address = (double*) malloc(sizeof(double));
 		matrix.push_back(address);
-		*(matrix[i]) = 0;
+		*(matrix[i]) = 1.0/n;
 	}
 
-	*(matrix[0]) = 1.0;
+	// *(matrix[0]) = 1.0/n;
 
 	return matrix;
 }
@@ -63,7 +63,9 @@ vector<double*> read_data(string file_path,double fac1){
 	}
 
 	for(int i = 0;i<n;i++){
-		*(matrix[i]+i) += fac2/n;
+		for(int j = 0;j<n;j++){
+			*(matrix[i]+j) += fac2/n;
+		}
 	}
 
 	return matrix;
@@ -74,11 +76,11 @@ void print(vector<double*> matrix, int m, int n){
 	double sum = 0;
 	for(int i = 0;i<m;i++){
 		for(int j = 0;j<n;j++){
-			cout << *(matrix[i] + j) << ",";
+			cout << *(matrix[i] + j) << ", ";
 			sum+=(*(matrix[i] + j));
 		}
-		cout << endl;
 	}
+	cout << endl;
 	cout << "****************       THE END       ****************" << endl;
 }
 
@@ -153,21 +155,24 @@ void pagerank(vector<double*> googleM, vector<double*> initM, double limit,strin
 		res.push_back(address);
 	}
 
-	while(diff>limit && iteration_count<10000){
+	while(diff>limit && iteration_count<1000){
+		print(initM,n,1);
 		matrixMult(googleM,initM,res);
 		diff = calcDiff(initM,res);
 		matrix_copy(res,initM);
-		normalize(initM);
+		// print(initM,n,1);
+		// normalize(initM);
 		iteration_count++;
 	}
 
 	cout << "Iteration Count- " << iteration_count << endl;
+	print(initM,n,1);
 	write_data(initM,name);
 }
 
 int main(int argc, char const *argv[]){
 	string input_file_path = argv[1];
-	string output_file_path = argv[3];
+	string output_file_path = argv[2];
 	double dampening_fac = 0.85;
 	double limit = 0.00001;
 	vector<double*> googleM = read_data(input_file_path, dampening_fac);
