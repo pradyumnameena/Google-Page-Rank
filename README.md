@@ -22,6 +22,9 @@ Compare correctness of the pagerank output against the given java/python outputs
 ## Performance analysis part
 Plot graphs with x-axis as benchmark ID, and y-axis as pagerank runtime, three graphs for your three executables. Compare pagerank latencies across the three implementations and comment on your observations. Prepare a 1-2 page PDF report with these graphs and observations.
 
+1. [Dataset](https://docs.google.com/spreadsheets/d/1sv3Q3t1BCAHUfu2gUrFfMzYwZjDI7svph1uJf5mth6Q/edit?usp=sharing)
+2. [Report](https://docs.google.com/document/d/1V3JmL34nisxtLvv0r-EJ8929XfxkX45yG0TZhMMD1q4/edit?usp=sharing)
+
 ## To submit
 Submit a zip file containing the three cpp files, a Makefile that compiles the executables and the PDF.
 
