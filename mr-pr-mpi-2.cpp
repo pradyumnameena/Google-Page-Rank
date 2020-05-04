@@ -10,6 +10,14 @@
 
 using namespace std;
 
+// global variables
+double* rank_array;
+int num_procs = 2;
+int num_nodes = 0;
+double limit = 0.00001;
+int max_iterations = 1000;
+double damping_factor = 0.85;
+
 MPI_Datatype hybrid_data_type;
 
 struct ultron{
@@ -24,17 +32,6 @@ struct hybrid_data{
 	double value;
 	int id;
 };
-
-// global variables
-int num_procs = 2;
-int num_nodes = 0;
-double limit = 0.00001;
-int max_iterations = 1000;
-double damping_factor = 0.85;
-
-int num_messages;
-double* rank_array;
-hybrid_data* datArray2;
 
 void print_graph(ultron ds){
 	cout << "Number of messages " << ds.n_msgs << endl;
@@ -95,19 +92,14 @@ void initialize(ultron &ds, string file_path){
 		*(ds.p_ranks + i) = 1.0/n;
 		if(ds.map.find(i)==ds.map.end()){
 			for(int j = 0;j<n;j++){
-				proc_id = (j/num_nodes);
+				proc_id = (j/num_nodes)+1;
 				ds.procs_msg_count[proc_id]++;
-				if(proc_id!=0){
-					count++;
-				}
+				count++;
 			}
 		}else{
 			for(int j = 0;j<ds.map[i].size();j++){
-				proc_id = (ds.map[i][j])/num_nodes;
+				proc_id = (ds.map[i][j])/num_nodes + 1;
 				ds.procs_msg_count[proc_id]++;
-				if(proc_id==0){
-					count-=1;
-				}
 			}
 		}
 	}
@@ -120,47 +112,33 @@ void initialize(ultron &ds, string file_path){
 void mapper(ultron ds, MPI_Request reqArray[], MPI_Status statusArray[]){
 	int proc_id = 0;
 	int count = 0;
-	int idx = 0;
 
-	MPI_Request tempReqs[num_procs-1];
-	MPI_Status tempStats[num_procs-1];
-	for(int i = 0;i<num_procs-1;i++){
-		MPI_Isend(&ds.procs_msg_count[i+1],1,MPI_INT,i+1,0,MPI_COMM_WORLD,&tempReqs[i]);
+	MPI_Request tempReqs[num_procs];
+	MPI_Status tempStats[num_procs];
+	for(int i = 1;i<=num_procs;i++){
+		MPI_Isend(&ds.procs_msg_count[i],1,MPI_INT,i,0,MPI_COMM_WORLD,&tempReqs[i-1]);
 	}
-
-	num_messages = ds.procs_msg_count[0];
-	datArray2 = (hybrid_data*)malloc(ds.procs_msg_count[0]*sizeof(hybrid_data));
-
-	MPI_Waitall(num_procs-1,tempReqs,tempStats);
+	MPI_Waitall(num_procs,tempReqs,tempStats);
 	
 	for(int i = 0;i<ds.n_pages;i++){
 		if(ds.map.find(i)!=ds.map.end()){
 			for(int j = 0;j<ds.map[i].size();j++){
-				proc_id = (ds.map[i][j]/num_nodes);
+				proc_id = (ds.map[i][j]/num_nodes) + 1;
 				struct hybrid_data send_packet;
 				send_packet.id = ds.map[i][j];
 				send_packet.value = (*(ds.p_ranks + i))/ds.map[i].size();
-				if(proc_id==0){
-					*(datArray2 + idx) = send_packet;
-					idx++;
-				}else{
-					MPI_Isend(&send_packet,1,hybrid_data_type,proc_id,0,MPI_COMM_WORLD,&reqArray[count]);
-					count++;
-				}
+				MPI_Isend(&send_packet,1,hybrid_data_type,proc_id,0,MPI_COMM_WORLD,&reqArray[count]);
+				count++;
 			}
 		}else{
 			for(int j = 0;j<ds.n_pages;j++){
-				proc_id = (j/num_nodes);
+				proc_id = (j/num_nodes) + 1;
 				struct hybrid_data send_packet;
 				send_packet.id = j;
 				send_packet.value = (*(ds.p_ranks + i))/ds.n_pages;
-				if(proc_id==0){
-					*(datArray2 + idx) = send_packet;
-					idx++;
-				}else{
-					MPI_Isend(&send_packet,1,hybrid_data_type,proc_id,0,MPI_COMM_WORLD,&reqArray[count]);
-					count++;
-				}
+				cout << send_packet.value << endl;
+				MPI_Isend(&send_packet,1,hybrid_data_type,proc_id,0,MPI_COMM_WORLD,&reqArray[count]);
+				count++;
 			}
 		}
 	}
@@ -169,7 +147,7 @@ void mapper(ultron ds, MPI_Request reqArray[], MPI_Status statusArray[]){
 }
 
 void reduce(){
-	int idx,rank;
+	int num_messages,idx,rank;
 	MPI_Comm_rank(MPI_COMM_WORLD,&rank);
 	MPI_Request tempReq1,tempReq2;
 	MPI_Status tempStat1, tempStat2;
@@ -179,12 +157,11 @@ void reduce(){
 	
 	MPI_Request recvArray[num_messages];
 	MPI_Status statusArray[num_messages];
-	datArray2 = (hybrid_data*)malloc(num_messages*sizeof(hybrid_data));
-	struct hybrid_data data;
+	struct hybrid_data datArray[num_messages];
 
 	idx = 0;
 	while(idx<num_messages){
-		MPI_Irecv(datArray2 + idx,1,hybrid_data_type,0,0,MPI_COMM_WORLD,&recvArray[idx]);
+		MPI_Irecv(&datArray[idx],1,hybrid_data_type,0,0,MPI_COMM_WORLD,&recvArray[idx]);
 		idx++;
 	}
 
@@ -195,35 +172,18 @@ void reduce(){
 	}
 
 	for(int i = 0;i<num_messages;i++){
-		data = *(datArray2 + i);
-		idx = data.id - rank*num_nodes;
-		*(rank_array + idx)+=(damping_factor * data.value);
+		idx = datArray[i].id - (rank-1)*num_nodes;
+		*(rank_array + idx)+=(damping_factor * datArray[i].value);
 	}
 
 	MPI_Isend(rank_array,num_nodes,MPI_DOUBLE,0,0,MPI_COMM_WORLD,&tempReq2);
 	MPI_Wait(&tempReq2,&tempStat2);
 }
 
-void reduce2(){
-	struct hybrid_data recv_packet;
-	int idx;
-
-	for(int i = 0;i<num_nodes;i++){
-		*(rank_array + i) = (1.0 - damping_factor)/(num_procs*num_nodes);
-	}
-
-	for(int i = 0;i<num_messages;i++){
-		recv_packet = *(datArray2 + i);
-		idx = recv_packet.id;
-		*(rank_array + idx)+=(damping_factor * recv_packet.value);
-	}
-	return;
-}
-
 int main(int argc, char *argv[]){
 	string input_file_path = argv[1];
 	string output_file_path = argv[2];
-	num_procs = atoi(argv[4]);
+	num_procs = atoi(argv[4]) - 1;
 	
 	ultron ds;
 	initialize(ds,input_file_path);
@@ -248,15 +208,14 @@ int main(int argc, char *argv[]){
    			MPI_Status statusArray[ds.n_msgs];
 
    			mapper(ds, reqArray, statusArray);
-   			reduce2();
 
-   			MPI_Request reqArray2[num_procs-1];
-   			MPI_Status statArray2[num_procs-1];
+   			MPI_Request reqArray2[num_procs];
+   			MPI_Status statArray2[num_procs];
    			
-   			for(int proc_id = 1;proc_id<num_procs;proc_id++){
-   				MPI_Irecv(rank_array + num_nodes*proc_id,num_nodes,MPI_DOUBLE,proc_id,0,MPI_COMM_WORLD,&reqArray2[proc_id-1]);
+   			for(int proc_id = 1;proc_id<=num_procs;proc_id++){
+   				MPI_Irecv(rank_array + num_nodes*(proc_id-1),num_nodes,MPI_DOUBLE,proc_id,0,MPI_COMM_WORLD,&reqArray2[proc_id-1]);
    			}
-   			MPI_Waitall(num_procs-1,reqArray2,statArray2);
+   			MPI_Waitall(num_procs,reqArray2,statArray2);
 
    			curr_diff = 0.0;
    			double sum = 0.0;
@@ -271,13 +230,13 @@ int main(int argc, char *argv[]){
    			}
    			
    			cout << i << "->" << curr_diff << endl;
-   			MPI_Request reqArray3[num_procs-1];
-   			MPI_Status statArray3[num_procs-1];
-   			for(int proc_id = 1;proc_id<num_procs;proc_id++){
+   			MPI_Request reqArray3[num_procs];
+   			MPI_Status statArray3[num_procs];
+   			for(int proc_id = 1;proc_id<=num_procs;proc_id++){
    				MPI_Isend(&curr_diff,1,MPI_DOUBLE,proc_id,0,MPI_COMM_WORLD,&reqArray3[proc_id-1]);
    			}
 
-   			MPI_Waitall(num_procs-1,reqArray3,statArray3);
+   			MPI_Waitall(num_procs,reqArray3,statArray3);
    			
    			if(curr_diff<limit || i==max_iterations-1){
    				write_data(ds.p_ranks,ds.n_pages,output_file_path);
