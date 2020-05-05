@@ -15,7 +15,6 @@ MPI_Datatype hybrid_data_type;
 struct ultron{
 	double* p_ranks;
 	int n_msgs,n_pages;
-	vector<int> noEntryNodes;
 	vector<int> procs_msg_count;
 	map<int, vector<int> > map;
 };
@@ -38,13 +37,8 @@ double dangling_contri;
 hybrid_data* datArray2;
 
 void print_graph(ultron ds){
-	cout << "Number of messages " << ds.n_msgs << endl;
-	cout << "Number of pages " << ds.n_pages << endl;
-	cout << "noEntryNodes: ";
-	for(int i = 0;i<ds.noEntryNodes.size();i++){
-		cout << ds.noEntryNodes[i] << " ";
-	}
-
+	cout << "Messages, pages " << ds.n_msgs << ", " << ds.n_pages << endl;
+	
 	cout << "Map: " << endl;
 	for(int i = 0;i<ds.n_pages;i++){
 		cout << i << "-> ";
@@ -210,11 +204,10 @@ void reduce2(){
 }
 
 int main(int argc, char *argv[]){
-	// command is ./mr-pr-mpi.o ./input-file.txt -o ./output-file.txt -np number_of_processors
+	// command is ./mr-pr-mpi.o ./input-file.txt -o ./output-file.txt maximum_iterations
 	string input_file_path = argv[1];
 	string output_file_path = argv[3];
 	if(argc>4){
-		// num_procs = atoi(argv[5]);
 		max_iterations = atoi(argv[4]);
 	}
 	
@@ -265,19 +258,12 @@ int main(int argc, char *argv[]){
    				sum+=(*(rank_array + index));
    			}
 
-   			// for(int index = 0;index<ds.n_pages;index++){
-   			// 	*(ds.p_ranks + index) = (*(ds.p_ranks + index))/sum;
-   			// }
-   			
    			cout << i << "->" << curr_diff << ", " << sum << endl;
    			MPI_Request reqArray3[num_procs-1];
    			MPI_Status statArray3[num_procs-1];
    			for(int proc_id = 1;proc_id<num_procs;proc_id++){
-   				// cout << proc_id << ",";
    				MPI_Isend(&curr_diff,1,MPI_DOUBLE,proc_id,0,MPI_COMM_WORLD,&reqArray3[proc_id-1]);
    			}
-
-   			MPI_Waitall(num_procs-1,reqArray3,statArray3);
    			
    			if(curr_diff<limit || i==max_iterations-1){
    				gettimeofday(&end, NULL);
@@ -286,6 +272,8 @@ int main(int argc, char *argv[]){
    				cout << "Time taken " << time_taken << " sec" << endl; 
    				write_data(ds.p_ranks,ds.n_pages,output_file_path);
    			}
+
+   			MPI_Waitall(num_procs-1,reqArray3,statArray3);
    		}else{
    			reduce();
    			MPI_Request tempReq3;
