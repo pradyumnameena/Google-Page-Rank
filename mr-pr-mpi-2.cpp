@@ -33,37 +33,24 @@ struct hybrid_data{
 	int id;
 };
 
-void print_graph(ultron ds){
-	cout << "Number of messages " << ds.n_msgs << endl;
-	cout << "Number of pages " << ds.n_pages << endl;
-	cout << "noEntryNodes: ";
-	for(int i = 0;i<ds.noEntryNodes.size();i++){
-		cout << ds.noEntryNodes[i] << " ";
-	}
-
-	cout << "Map: " << endl;
-	for(int i = 0;i<ds.n_pages;i++){
-		cout << i << "-> ";
-		for(int j = 0;j<ds.map[i].size();j++){
-			cout << ds.map[i][j] << ", ";
-		}
-		cout << endl;
-	}
-	cout << endl;
-}
-
 void write_data(double* matrix, int n, string name){
+	int i = 0;
 	double sum = 0.0;
 	ofstream file;
-	file.precision(16);
 	file.open("./" + name);
-	
+	file.precision(16);
+
 	if(file.is_open()){
-		for(int i = 0;i<n;i++){
-			file << i << " = " << *(matrix + i) << " \n";
+		while(i<n){
+			file << " ";
+			file << *(matrix + i);
+			file << "\n";
 			sum+=(*(matrix + i));
+			i++;
 		}
-		file << "sum " << sum;
+		
+		file << "sum ";
+		file << sum;
 	}
 
 	file.close();
